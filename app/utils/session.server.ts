@@ -129,13 +129,24 @@ export async function requireUserId(
   request: Request,
   redirectTo: string = new URL(request.url).pathname
 ): Promise<string> {
-  const session = await getUserSession(request);
-  const userId = session.get("userId");
-  if (!userId || typeof userId !== "string") {
+  const userId = await getUserId(request);
+  if (!userId) {
     const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
     throw redirect(`/login?${searchParams}`);
   }
   return userId;
+}
+
+export async function getSsoLoginRedirect(request: Request) {
+  if (env.get("SSO_AUTH_ENABLED") !== "true") return null;
+
+  if (!(await getUserId(request))) {
+    throw new Response("SSO identity is missing or not allowlisted.", {
+      status: 403,
+    });
+  }
+
+  return redirect("/");
 }
 
 export async function requireUser(request: Request) {
