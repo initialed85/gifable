@@ -1,4 +1,8 @@
 /.git
+/.slop-haus
+/.slop-haus.env
+/.mcp.json
+/CLAUDE.md
 /.vim
 /.sessions
 /node_modules
