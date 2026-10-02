@@ -1,4 +1,4 @@
-import { json, redirect, type ActionArgs } from "@remix-run/node";
+import { json, type ActionArgs, type LoaderArgs } from "@remix-run/node";
 import {
   isRouteErrorResponse,
   useActionData,
@@ -10,7 +10,12 @@ import { getClientIPAddress, useHydrated } from "remix-utils";
 
 import { db } from "~/utils/db.server";
 import { badRequest } from "~/utils/request.server";
-import { createUserSession, login, register } from "~/utils/session.server";
+import {
+  createUserSession,
+  getSsoLoginRedirect,
+  login,
+  register,
+} from "~/utils/session.server";
 import { withZod } from "@remix-validated-form/with-zod";
 import { z } from "zod";
 import { ValidatedForm, validationError } from "remix-validated-form";
@@ -140,8 +145,9 @@ export async function action({ request }: ActionArgs) {
   }
 }
 
-export function loader() {
-  if (env.get("SSO_AUTH_ENABLED") === "true") return redirect("/");
+export async function loader({ request }: LoaderArgs) {
+  const ssoRedirect = await getSsoLoginRedirect(request);
+  if (ssoRedirect) return ssoRedirect;
 
   return json({
     allowSignup: !env.get("DISABLE_SIGNUP"),
