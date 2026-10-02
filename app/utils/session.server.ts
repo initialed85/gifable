@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import { createCookieSessionStorage, redirect } from "@remix-run/node";
 import env from "./env.server";
+import { getAllowedSsoEmail } from "./sso-identity.server";
 
 import { db } from "./db.server";
 import debug from "debug";
@@ -75,7 +77,47 @@ function getUserSession(request: Request) {
   return storage.getSession(request.headers.get("Cookie"));
 }
 
+function getSsoEmail(request: Request) {
+  if (env.get("SSO_AUTH_ENABLED") !== "true") return null;
+
+  const allowedEmails = (env.get("SSO_ALLOWED_EMAILS") || "")
+    .split(",")
+    .map((value) => value.trim());
+  return getAllowedSsoEmail(request, allowedEmails);
+}
+
+async function getOrCreateSsoUser(email: string) {
+  const existing = await db.user.findUnique({ where: { username: email } });
+  if (existing) {
+    if (!existing.isAdmin) {
+      await db.user.update({
+        where: { id: existing.id },
+        data: { isAdmin: true },
+      });
+    }
+    return existing.id;
+  }
+
+  const passwordHash = await hashPassword(randomBytes(32).toString("hex"));
+  try {
+    const user = await db.user.create({
+      data: { username: email, passwordHash, isAdmin: true },
+    });
+    return user.id;
+  } catch (error) {
+    // A simultaneous first request may have created the same email already.
+    const user = await db.user.findUnique({ where: { username: email } });
+    if (user) return user.id;
+    throw error;
+  }
+}
+
 export async function getUserId(request: Request) {
+  if (env.get("SSO_AUTH_ENABLED") === "true") {
+    const email = getSsoEmail(request);
+    return email ? getOrCreateSsoUser(email) : null;
+  }
+
   const session = await getUserSession(request);
   const userId = session.get("userId");
   if (!userId || typeof userId !== "string") return null;

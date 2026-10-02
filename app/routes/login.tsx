@@ -1,4 +1,4 @@
-import { json, type ActionArgs } from "@remix-run/node";
+import { json, redirect, type ActionArgs } from "@remix-run/node";
 import {
   isRouteErrorResponse,
   useActionData,
@@ -57,6 +57,10 @@ export function meta() {
 }
 
 export async function action({ request }: ActionArgs) {
+  if (env.get("SSO_AUTH_ENABLED") === "true") {
+    return new Response("Local login is disabled; use SSO.", { status: 403 });
+  }
+
   log("Handling login action");
 
   const form = await request.formData();
@@ -137,6 +141,8 @@ export async function action({ request }: ActionArgs) {
 }
 
 export function loader() {
+  if (env.get("SSO_AUTH_ENABLED") === "true") return redirect("/");
+
   return json({
     allowSignup: !env.get("DISABLE_SIGNUP"),
   });
